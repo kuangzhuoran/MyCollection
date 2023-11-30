@@ -1,0 +1,50 @@
+CrossMap.py bed golani2galili.chain golani.All.PC1.bed > golani.trans2.galili.PC1.bed
+#把golani的坐标转换为galili的坐标
+#golani的Chr6和Chr18融合为galili
+
+#然后只提取了和融合相关染色体的信息
+得到了golani.trans2.galili.PC1.fusion.bed
+awk '{print $6"\t"$7"\t"$8"\t"$9}' golani.trans2.galili.PC1.fusion.bed | sort -Vk 1 | awk '{if($2<$3) print $1"\t"$2"\t"$3"\t"$4; else print $1"\t"$3"\t"$2"\t"$4}' | uniq > tmp1
+bedtools intersect -a galili.All.PC1.bed -b tmp1 -F 0.8 -wa -wb > tmp2
+
+awk '{if($4*$8>0)print}' tmp2 | awk '{print $5"\t"$6"\t"$7"\t"$8}' | uniq | bedtools sort -i - | bedtools merge -i - > stable.region.bed
+awk '{print $3-$2+1}' stable.region.bed | awk '{sum+=$1} END {print "Stable Length = ", sum}'  #stable Length
+
+awk '{if($4*$8>0)print}' tmp2 | awk '{if($4>0)print}' | awk '{print $5"\t"$6"\t"$7"\t"$8}' | uniq | bedtools sort -i - | bedtools merge -i - > stableA.region.bed
+awk '{print $3-$2+1}' stableA.region.bed | awk '{sum+=$1} END {print "StableA Length = ", sum}'  #stableA Length
+
+awk '{if($4*$8>0)print}' tmp2 | awk '{if($4<0)print}' | awk '{print $5"\t"$6"\t"$7"\t"$8}' | uniq | bedtools sort -i - | bedtools merge -i - > stableB.region.bed
+awk '{print $3-$2+1}' stableB.region.bed | awk '{sum+=$1} END {print "StableB Length = ", sum}'  #stableB Length
+
+awk '{if($4*$8<0)print}' tmp2 | awk '{if($4>0)print}' > BtoA.tmp
+awk '{print $5"\t"$6"\t"$7}' BtoA.tmp | uniq | bedtools sort -i - | bedtools merge -i - > BtoA.region.bed
+awk '{print $3-$2+1}' BtoA.region.bed | awk '{sum+=$1} END {print "B to A = ", sum}'
+
+awk '{if($4*$8<0)print}' tmp2 | awk '{if($4<0)print}' > AtoB.tmp
+awk '{print $5"\t"$6"\t"$7}' AtoB.tmp | uniq | bedtools sort -i - | bedtools merge -i - > AtoB.region.bed
+awk '{print $3-$2+1}' AtoB.region.bed | awk '{sum+=$1} END {print "A to B = ", sum}'
+###以上就是融合相关染色体的AB区室转换
+
+#提取基因
+awk 'BEGIN{ FS="\t";OFS="\t" }{print $6,$7,$8,$9,$1,$2,$3,$4}' golani.trans2.galili.PC1.fusion.bed > GetGene.bed
+bedtools intersect -a GetGene.bed -b BtoA.region.bed -wa -wb | awk '{print $5"\t"$6"\t"$7}' | sort | uniq | sort -Vk 1 > Fusion.BtoA.golani.bed
+#就得到了 B to A在golani基因组上的坐标
+
+#和注释信息取交集
+grep -w "mRNA" golani.chr.v4.gff | awk '{print $1"\t"$4"\t"$5"\t"$9}' | awk -F ";" '{print $1}' | sed 's/ID=//g' > golani.chr.v4.gene.bed
+bedtools intersect -a golani.chr.v4.gene.bed -b Fusion.BtoA.golani.bed -f 0.8 -u -wa | awk '{print $4}' > Fusion.BtoA.golani.gene
+
+####全基因组
+awk '{print $6"\t"$7"\t"$8"\t"$9}' golani.trans2.galili.PC1.bed | sort -Vk 1 | awk '{if($2<$3) print $1"\t"$2"\t"$3"\t"$4; else print $1"\t"$3"\t"$2"\t"$4}' | uniq > tmp1
+bedtools intersect -a galili.All.PC1.bed -b tmp1 -f 0.8 -wa -wb > tmp2
+
+awk '{if($4*$8>0)print}' tmp2 | awk '{print $5"\t"$6"\t"$7"\t"$8}' | uniq | bedtools sort -i - | bedtools merge -i - > stable.region.bed
+awk '{print $3-$2+1}' stable.region.bed | awk '{sum+=$1} END {print "Stable Length = ", sum}'  #stable Length
+
+awk '{if($4*$8<0)print}' tmp2 | awk '{if($4<0)print}' > BtoA.tmp
+awk '{print $5"\t"$6"\t"$7}' BtoA.tmp | uniq | bedtools sort -i - | bedtools merge -i - > BtoA.region.bed
+awk '{print $3-$2+1}' BtoA.region.bed | awk '{sum+=$1} END {print "B to A = ", sum}'
+
+awk '{if($4*$8<0)print}' tmp2 | awk '{if($4>0)print}' > AtoB.tmp
+awk '{print $5"\t"$6"\t"$7}' AtoB.tmp | uniq | bedtools sort -i - | bedtools merge -i - > AtoB.region.bed
+awk '{print $3-$2+1}' AtoB.region.bed | awk '{sum+=$1} END {print "A to B = ", sum}'
