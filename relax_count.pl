@@ -6,7 +6,7 @@
 use warnings;
 open $I,"< $ARGV[0]" or die "no inputfile!";
 @gene  = <$I>;
-@species = ("carmeli","galili","golani","judaei","Node9");
+@species = ("cahirinus","dimidiatus","russatus","kempi","percivali");
 @count = 0;
 $name = $ARGV[0];
 $name =~ s/\.fa\.filter\.relax//g;

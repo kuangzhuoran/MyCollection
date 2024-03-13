@@ -1,0 +1,2 @@
+minimap2 -t 20 -cx asm5 --cs 00.Efon.fasta Ma6.Chr.2210.fasta > Ma2Efon.paf && mkdir mapdone2 && /data/01/user164/software/transanno-x86_64-unknown-linux-musl-v0.3.0/transanno minimap2chain Ma2Efon.paf --output Ma2Efon.chain
+#minimap2 -cx asm5 --cs Ma6.Chr.2210.fasta 00.Efon.fasta > Efon2Ma.paf && mkdir mapdone && /data/01/user164/software/transanno-x86_64-unknown-linux-musl-v0.3.0/transanno minimap2chain Efon2Ma.paf --output Efon2Ma.chain
