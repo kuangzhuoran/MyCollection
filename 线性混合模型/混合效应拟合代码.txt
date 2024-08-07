@@ -1,0 +1,33 @@
+#调用所需R包
+library(lme4)#混合效应模型的
+library(ggplot2)#绘图的
+library(ggeffects) #提取混合效应模型预测结果的
+library(extrafont)#添加字体的
+#读取我们的实验数据
+mydata <- read.csv(file.choose(),header = T,row.names = 1)
+head(mydata)
+#一般情况下，为了使效应值更加显著，我们需要标准化一下我们的解释因子，不标准化也可以的
+#我们在这里以不标准化为例，如果想标准化运行下边代码就可以
+#mydata$herd_intensity <- scale(mydata$herd_intensity, center = TRUE, scale = TRUE)
+
+#构建换很效应模型的表达式
+mixed <- lmer(biomass~herd_intensity + (1|block),data = mydata)
+
+#查看模型结果
+summary(mixed)
+
+#提取模型的预测结果
+pred.mm <- ggpredict(mixed, terms = c("herd_intensity"))
+pred.mm
+#绘制预测结果
+ggplot(pred.mm) + 
+    geom_line(aes(x = x, y = predicted)) +        
+    geom_ribbon(aes(x = x, ymin = predicted - std.error, ymax = predicted + std.error), 
+                fill = "lightgrey", alpha = 0.5) +  
+    geom_point(data = mydata,                     
+               aes(x = herd_intensity, y = biomass, colour = Tr,size= herd_intensity)) + 
+  scale_colour_manual(values = c("#E64B35FF", "#4DBBD5FF", "#00A087FF","#F39B7FFF","#91D1C2FF", "#8491B4FF"))+
+  scale_x_continuous(limits = c(0,5))+
+    labs(x = "放牧强度", y = "生物量", 
+         title = "放牧强度增加导致地上生物量降低") + 
+    theme_bw()
