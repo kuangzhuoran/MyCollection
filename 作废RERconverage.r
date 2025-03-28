@@ -1,3 +1,6 @@
+###此脚本作废
+###最新的脚本见RERconverage文件夹中的脚本
+
 library(RERconverge)
 library(devtools)
 library(readTrees)
