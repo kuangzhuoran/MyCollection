@@ -1,0 +1,231 @@
+参考文献:https://doi.org/10.1186/s12864-022-08828-7
+
+
+假设罗氏鼢鼠Erothschildi的Chr5是融合染色体 - 罗伯逊融合/端对端融合
+秦岭鼢鼠Erufescens是其最近的近缘物种
+
+再挑选一个外群，比如Efontanierii
+我们总共有三个物种，生成了两个比对:Eroth-Erufe and Eroth-Efon
+
+
+0.需要安装kent tools，比如chainSwap、netSyntenic等
+并添加到环境变量中，这里省略
+
+
+
+1.lastz to chain
+#https://github.com/hillerlab/make_lastz_chains
+#以Erothschildi为target/reference，以Erufescens和Efontanierii为query
+python ./make_chains.py  ErothChr5 EfonChr5   Erothschildi.Chr5.fa Efon.prefuChr5.fa   --project_dir ErothChr5.EfonChr5
+#这里Efontanierii只保留了对应的两条预融合染色体 - 加快运行速度
+python ./make_chains.py  ErothChr5 ErufeChr5  Erothschildi.Chr5.fa Erufe.prefuChr5.fa  --project_dir ErothChr5.ErufeChr5
+#这里Erufescens只保留了对应的两条预融合染色体 - 加快运行速度
+
+#顺利的话我们会得到两个chain文件
+#ErothChr5.EfonChr5.manual.clean.chain
+#ErothChr5.ErufeChr5.manual.clean.chain
+#我这个程序遇到了一些问题，所以命名有点奇怪
+#忽略即可
+
+#此外，make_lastz_chains会生成对应reference和query的2bit文件和染色体长度文件
+#改一下名，整理一下
+
+
+
+2. rbest chain
+#用到的脚本:doRecipBest.pl
+#自己下载一下
+mkdir -p ./rbest.Chr5/axtChain 
+
+#对两个比对都要运行，我这里只展示一个
+#把上一步生成的chain文件拷贝过去
+gzip -c /path/to/ErothChr5.ErufeChr5.manual.clean.chain > ./rbest.Chr5/axtChain/ErothChr5.ErufeChr5.over.chain.gz
+#注意，这里要全路径
+#
+/data/01/user157/software/jksrc/kent/src/hg/utils/automation/doRecipBest.pl ErothChr5 ErufeChr5 \
+-buildDir /data/01/user164/workspace_for_whole_object/fenshuChr.2406/25.tytus/rbest.Chr5 \
+-target2Bit /data/01/user164/workspace_for_whole_object/fenshuChr.2406/25.tytus/ErothChr5.2bit \
+-query2Bit  /data/01/user164/workspace_for_whole_object/fenshuChr.2406/25.tytus/ErufeChr5.2bit \
+-load -workhorse localhost \
+-targetSizes /data/01/user164/workspace_for_whole_object/fenshuChr.2406/25.tytus/ErothChr5.chrom.sizes \
+-querySizes  /data/01/user164/workspace_for_whole_object/fenshuChr.2406/25.tytus/ErufeChr5.chrom.sizes
+#需要安装kent tools，比如chainSwap、netSyntenic等，并添加到环境变量中，这里省去
+#第二次运行的时候可能会报错，可以试试直接运行生成的doRecipBest.csh
+#tcsh doRecipBest.csh
+
+#输出三个文件夹：
+axtChain  axtRBestNet  mafRBestNet
+axtChain中的ErothChr5.ErufeChr5.rbest.chain.gz和axtRBestNet中的Chr5.ErothChr5.ErufeChr5.net.axt.gz就是后面要用到的文件
+#把这俩文件解压一下
+cd ./rbest.Chr5/axtChain 
+gunzip -c axtRBestNet/Chr5.ErothChr5.ErufeChr5.net.axt.gz > ../ErothChr5.ErufeChr5.rbest.axt
+gunzip -c axtChain/ErothChr5.ErufeChr5.rbest.chain.gz > ../ErothChr5.ErufeChr5.rbest.chain
+gunzip -c axtChain/ErufeChr5.ErothChr5.rbest.chain.gz > ../ErufeChr5.ErothChr5.rbest.chain
+#对两个比对都要运行，我这里只展示一个
+
+
+
+3.
+#https://github.com/bedops/bedops
+#这里需要准备一个vcf文件
+#我是用了Erothschildi和Erufescens的二代重测序数据，比对到Erothschildi上，走GATK4提了SNP
+#最好是只做硬过滤，不要条件过滤
+#提取指定染色体的vcf
+/path/to/bedops/bin/convert2bed --input=vcf < Chr5.vcf > Chr5.bed
+
+
+
+4.下载https://github.com/bposzewiecka/tytus
+先修改config.yaml
+$ cat config.yaml                   
+samples:
+  - target: 'ErothChr5'
+    query: 'ErufeChr5'
+    ffrom: 'target'
+    outgroup: 'EfonChr5'
+data_folder: '/data/01/user164/workspace_for_whole_object/fenshuChr.2406/25.tytus'
+default_chromosome: 'Chr5'
+ubcs_params:
+  - region: 1000000
+    window_size: 300
+    number_of_bins: [2, 20, 300]
+    with_snps: ['True', 'False']
+    derived: ['target', 'query']
+
+
+再修改Snakefile的前几行
+
+vim Snakefile
+configfile: "config.yaml"
+
+DATA_FOLDER = config['data_folder']
+
+chromosomes = {}
+chromosomes['ErothChr5'] = 'Chr5'
+#chromosomes['ErothChr5'] = [ 'Chr' + str(chrom) for chrom in list(range(1,23)) + ['X', 'Y']]
+
+rule main:
+    input:
+        [ expand( DATA_FOLDER +  '/{query}/outgroup.{outgroup}/{chromosome}.{target}.{query}.outgroup.{outgroup}.from.{ffrom}.rbest.fasta', chromosome = chromosomes[sample['target']], **sample) for sample in config['samples']],
+        [ expand(DATA_FOLDER + '/{query}/outgroup.{outgroup}/derived_in_{derived}/region.{region}.window.{window_size}.bins.{number_of_bins}.with_snps.{with_snps}/{chromosome}.{target}.{query}.outgroup.{outgroup}.derived_in_{derived}.region.{region}.window.{window_size}.bins.{number_of_bins}.with_snps.{with_snps}.from.{ffrom}.ubcs.summary.tsv', chromosome = chromosomes[sample['target']], **sample, **ubcs_params) for sample in config['samples'] for ubcs_params in config['ubcs_params'] if sample['query'] == 'ErufeChr5'],
+#注意，要修改上面这一行的if sample['query'] == 'ErufeChr5']
+
+
+
+5.
+cp -r /path/to/tytus/scripts ./
+
+mkdir -p ErothChr5/snps
+cp ErothChr5.chrom.sizes ErothChr5
+cp Chr5.bed ErothChr5/snps/Chr5.ErothChr5.snps.bed
+
+mkdir -p ErufeChr5/ErufeChr5.ErothChr5
+cp ErufeChr5.chrom.sizes ErufeChr5
+#chainToAxt ErufeChr5.ErothChr5.rbest.chain ErufeChr5.2bit ErothChr5.2bit ErufeChr5.ErothChr5.rbest.axt
+cat ErufeChr5.ErothChr5.rbest.axt > ./ErufeChr5/ErufeChr5.ErothChr5/Chr5.ErufeChr5.ErothChr5.from.query.rbest.axt 
+
+mkdir -p ErufeChr5/ErothChr5.ErufeChr5
+cat ErothChr5.ErufeChr5.rbest.axt > ./ErufeChr5/ErothChr5.ErufeChr5/Chr5.ErothChr5.ErufeChr5.from.target.rbest.axt
+
+mkdir -p EfonChr5
+cp ErothChr5.EfonChr5.rbest.chain EfonChr5 
+#ln -s /path/to/Efon.prefuChr5.fa EfonChr5/EfonChr5.fa
+ln -s /opt/synData2/kzr/fenshuChr.2406/25.tytus/EfonChr5.fa EfonChr5/EfonChr5.fa
+
+#运行
+snakemake -s Snakefile  --cores 10
+
+
+
+7.
+会在外群的文件夹里面得到derived in target和derived in query的文件夹
+然后你选择一个bin numbe统计UBCS
+然后根据6 Mya · (1 − R).这个公式计算时间按
+6换成你的分化时间
+R是两个比值的比值
+分子上的比值是融合后的短点附近的UBSC值/融合前的物种的UBSC值
+分母上的比值是融合后的物种端粒附近的UBSC值/距端粒几Mb之外的UBSC值
+
+awk '{if($11>72839708 && $11<74790054)print}' Chr5.ErothChr5.ErufeChr5.outgroup.EfonChr5.derived_in_query.region.1000000.window.300.bins.2.with_snps.True.from.target.ubcs.details.tsv > fusion.site.tsv
+awk '{sum += $16};END {print sum/NR}' fusion.site.tsv
+
+#Eroth.Chr5
+#query.fusion.site - UCSC = 0.0162558
+#target.fusion.site - UCSC = 0.0168998
+#0.0168998/0.0162558 = 1.03961662914
+
+#target
+#端粒/染色体首尾200kb - UCSC = 0.00288506
+#距离染色体首尾 5–6 Mb - UCSC = 0.0110254
+#0.00323023/0.0110254 = 0.29298075353
+
+#0.44 * (1 - 1.03961662914/0.29298075353) = -1.12130159169
+##################
+#Eroth.Chr6
+#query.fusion.site - UCSC = 0.0193618
+#target.fusion.site - UCSC = 0.0213668
+#0.0213668/0.0193618 = 1.10355442159
+
+#target
+#端粒/染色体首尾200kb - UCSC = 0.00250909
+#距离染色体首尾 5–6 Mb - UCSC = 0.00710116
+#0.00250909/0.00710116 = 0.35333522973
+
+0.44 * (1 - 1.10355442159/0.35333522973) = -0.934
+
+
+
+另一种跑法：
+4.下载https://github.com/bposzewiecka/tytus
+先修改config.yaml
+$ cat config.yaml                   
+samples:
+  - target: 'ErothChr5'
+    query: 'ErufeChr5'
+    ffrom: 'query'
+    outgroup: 'EfonChr5'
+data_folder: '/data/01/user164/workspace_for_whole_object/fenshuChr.2406/25.tytus'
+default_chromosome: 'Chr5'
+ubcs_params:
+  - region: 1000000
+    window_size: 300
+    number_of_bins: [2, 20, 300]
+    with_snps: ['True', 'False']
+    derived: ['target', 'query']
+
+
+再修改Snakefile的前几行
+
+vim Snakefile
+configfile: "config.yaml"
+
+DATA_FOLDER = config['data_folder']
+
+chromosomes = {}
+chromosomes['ErothChr5'] = 'Chr5'
+#chromosomes['ErothChr5'] = [ 'Chr' + str(chrom) for chrom in list(range(1,23)) + ['X', 'Y']]
+
+rule main:
+    input:
+        [ expand( DATA_FOLDER +  '/{query}/outgroup.{outgroup}/{chromosome}.{target}.{query}.outgroup.{outgroup}.from.{ffrom}.rbest.fasta', chromosome = chromosomes[sample['target']], **sample) for sample in config['samples']],
+        [ expand(DATA_FOLDER + '/{query}/outgroup.{outgroup}/derived_in_{derived}/region.{region}.window.{window_size}.bins.{number_of_bins}.with_snps.{with_snps}/{chromosome}.{target}.{query}.outgroup.{outgroup}.derived_in_{derived}.region.{region}.window.{window_size}.bins.{number_of_bins}.with_snps.{with_snps}.from.{ffrom}.ubcs.summary.tsv', chromosome = chromosomes[sample['target']], **sample, **ubcs_params) for sample in config['samples'] for ubcs_params in config['ubcs_params'] if sample['query'] == 'ErufeChr5'],
+#注意，要修改上面这一行的if sample['query'] == 'ErufeChr5']
+
+
+6.
+#再次运行
+snakemake -s getUBCSStats.snakemake --cores 10
+这里的getUBCSStats.snakemake所需要的config文件和之前是相同的：
+samples:
+  - target: 'ErothChr5'
+    query: 'ErufeChr5'
+    ffrom: 'target'   #
+    outgroup: 'EfonChr5'
+data_folder: '/data/01/user164/workspace_for_whole_object/fenshuChr.2406/25.tytus'
+default_chromosome: 'Chr5'
+ubcs_params:
+  - region: 1000000
+    window_size: 300
+    number_of_bins: [2, 20, 300]
+    with_snps: ['True', 'False']
+    derived: ['target', 'query']
