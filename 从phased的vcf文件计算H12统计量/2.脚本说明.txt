@@ -1,0 +1,175 @@
+注意，这里的脚本和本说明由ChatGPT生成
+
+===================
+"""
+2.normalize_h2h1_by_h12.py
+
+脚本功能
+--------
+本脚本用于对 Garud's H 统计量结果表中的 H2/H1 进行标准化处理，
+其理论依据来自 Garud and Rosenberg (2015) 对 H12 与 H2/H1 数学关系的推导。
+
+在 Garud et al. (2015) 中，
+H12 被提出用于检测 hard sweep 和 soft sweep，
+而 H2/H1 被提出用于在高 H12 的前提下辅助区分 hard sweep 与 soft sweep。
+
+随后，Garud and Rosenberg (2015) 指出，
+H2/H1 的取值范围并不是固定不变的，
+而是依赖于对应窗口的 H12 值。
+因此，原始 H2/H1 数值不能在不同 H12 背景下直接比较。
+
+为了解决这个问题，
+Garud and Rosenberg (2015) 推导了：
+
+1. 给定 H12 时，H2/H1 的精确理论上界 Zmax(H12)
+2. 一个便于计算的近似上界 Ymax(H12)
+
+并进一步定义了两种标准化统计量：
+
+1. 精确标准化
+   Z' = Z / Zmax(H12)
+
+2. 近似标准化
+   Z'' = Z / Ymax(H12)
+
+其中 Z = H2/H1。
+
+本脚本的作用
+------------
+本脚本读取 Garud H 统计量结果表，
+要求输入文件至少包含以下两列：
+
+- H12
+- H2_H1
+
+然后在原始表格基础上新增以下列：
+
+- H2_H1_Zmax_exact
+    给定 H12 时 H2/H1 的精确理论上界
+
+- H2_H1_Ymax_approx
+    给定 H12 时 H2/H1 的近似理论上界
+
+- H2_H1_norm_exact
+    精确标准化后的 H2/H1，即 Z'
+
+- H2_H1_norm_approx
+    近似标准化后的 H2/H1，即 Z''
+
+这样处理后，
+不同窗口、不同 peak、甚至不同数据集之间的 H2/H1 会更可比。
+
+输入文件
+--------
+输入文件应为制表符分隔文本文件，
+通常来自以下脚本之一的输出：
+
+- calc_garud_h_from_vcf.py
+- calc_garud_h_scikit_allel.py
+
+输入文件通常至少包含以下列：
+
+- chrom
+- window_index
+- window_start
+- window_end
+- window_mid
+- n_sites
+- n_samples
+- n_haplotypes
+- K
+- H1
+- H2
+- H12
+- H123
+- H2_H1
+
+输出文件
+--------
+输出文件为制表符分隔文本文件，
+在保留原始列的基础上新增标准化相关列：
+
+- H2_H1_Zmax_exact
+- H2_H1_Ymax_approx
+- H2_H1_norm_exact
+- H2_H1_norm_approx
+
+参数说明
+--------
+-i, --input
+    输入文件，必须为包含 H12 和 H2_H1 列的 TSV 文件
+
+-o, --output
+    输出文件，写出加入标准化结果后的新 TSV 文件
+
+--h12-col
+    H12 列名
+    默认：H12
+
+--h2h1-col
+    H2/H1 列名
+    默认：H2_H1
+
+--clip
+    可选参数
+    用于将标准化结果截断到 [0, 1] 区间
+    该参数主要用于处理浮点数运算带来的极小数值误差，
+    例如理论上应为 1.0，但实际可能算成 1.0000000001
+
+使用建议
+--------
+1. 建议先使用 H12 在全基因组范围内寻找候选 sweep 区域
+2. 再在高 H12 的窗口或 peak 中解释 H2/H1
+3. 若希望更严谨地比较不同 peak 的“soft 程度”，
+   建议优先参考 H2_H1_norm_exact
+4. 当 H12 较高时，标准化通常更有意义，
+   因为 Garud and Rosenberg (2015) 指出，
+   H2/H1 的解释在高 H12 区域更受其理论上界约束。
+
+注意事项
+--------
+1. 本脚本只负责对已有的 H12 和 H2/H1 结果做后处理标准化，
+   不重新计算 H1、H2、H12、H123 或 H2/H1
+2. 若输入文件中 H12 <= 0 或 H12 > 1，
+   则对应行的标准化结果会记为 NA
+3. 若 H2_H1 为缺失值，
+   则对应标准化结果也会记为 NA
+4. 标准化后的 H2/H1 主要用于比较不同窗口之间的相对位置，
+   不应脱离 H12 单独解释
+
+理论参考文献
+------------
+1. Garud NR, Messer PW, Buzbas EO, Petrov DA. 2015.
+   Recent Selective Sweeps in North American Drosophila melanogaster
+   Show Signatures of Soft Sweeps.
+   PLoS Genetics 11(2): e1005004. :contentReference[oaicite:6]{index=6}
+
+   说明：
+   该文献提出了 H12 和 H2/H1，
+   其中 H12 用于检测 hard sweep 和 soft sweep，
+   H2/H1 用于在高 H12 条件下辅助区分 hard sweep 与 soft sweep。
+
+2. Garud NR, Rosenberg NA. 2015.
+   Enhancing the mathematical properties of new haplotype homozygosity
+   statistics for the detection of selective sweeps.
+   Theoretical Population Biology 102: 94-101. :contentReference[oaicite:8]{index=8}
+
+   说明：
+   该文献证明了 H2/H1 的上界依赖于 H12，
+   并据此提出精确和近似标准化统计量，
+   使不同 H12 背景下的 H2/H1 更可比较。
+
+推荐引用方式
+------------
+若在论文、报告或方法说明中使用本脚本，
+建议至少引用以上两篇文献。
+
+若只使用 H12 和 H2/H1 原始统计量，
+至少应引用 Garud et al. (2015)。
+
+若使用了本脚本输出的标准化结果，
+则应同时引用：
+
+- Garud et al. (2015)
+- Garud and Rosenberg (2015)
+"""
