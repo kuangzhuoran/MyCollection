@@ -8,3 +8,5 @@ python 2.normalize_h2h1_by_h12.py -i test.20k_5k.output.txt -o test.20k_5k.outpu
 
 #这里的脚本或者说明都是ChatGPT生成的
 #请详细阅读脚本说明或者脚本头的注释
+
+#当前版本是v20260401
